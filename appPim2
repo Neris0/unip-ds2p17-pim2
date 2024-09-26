@@ -3,6 +3,7 @@
 #include <string.h>
 #include <time.h>
 #include <locale.h>
+#include <conio.h> 
 
 // Definições de limite
 #define MAX_LIVROS 100
@@ -18,6 +19,25 @@ void limparTela() {
     #else
         system("clear");
     #endif
+}
+
+void esconderSenha(char senha[]) {
+    int i = 0;
+    char ch;
+
+    // Lê a senha caractere por caractere
+    while ((ch = getch()) != '\r') {  // '\r' é o Enter (ou '\n' em outros sistemas)
+        if (ch == '\b') {  // Backspace
+            if (i > 0) {
+                i--;
+                printf("\b \b");  // Remove o último caractere impresso
+            }
+        } else {
+            senha[i++] = ch;
+            printf("*");  // Exibe um asterisco na tela
+        }
+    }
+    senha[i] = '\0';  // Termina a string da senha
 }
 
 
@@ -83,7 +103,6 @@ void lerBibliotecarios() {
 }
 
 void atualizarBibliotecario() {
-    limparTela();
     lerBibliotecarios();
     int id;
     printf("0. Cancelar\n");
@@ -294,6 +313,7 @@ void gerarRelatorio() {
     lerClientes();
     lerLivros();
     lerEmprestimos();
+    system("pause");
 }
 
 // Submenus de cada entidade
@@ -409,7 +429,6 @@ void menu() {
         printf("5. Devolucao de Livro\n");
         printf("6. Gerar Relatorio\n");
         printf("0. Sair\n");
-        printf("Escolha uma opcao: ");
         scanf("%d", &opcao);
         limparTela();
 
@@ -426,9 +445,85 @@ void menu() {
     } while (opcao != 0);
 }
 
+void esperarTecla() {
+    printf("Pressione qualquer tecla para continuar...\n");
+    _sleep(2000);  // Espera 2000 milissegundos (2 segundos)
+    limparTela();
+}
+
+
+
+void telaLogin() {
+    char usuario[20];
+    char senha[20];
+
+    // Credenciais pré-definidas
+    const char usuarioCorreto[] = "admin";
+    const char senhaCorreta[] = "123456";
+
+    int tentativas = 0;    // Contador de tentativas
+    int loginSucesso = 0;  // Variável para verificar o sucesso do login
+
+    // Início do loop de login
+    while (tentativas < 3 && !loginSucesso) {
+        // Desenha o cabeçalho estilizado
+        printf("********************************************\n");
+        printf("*                                          *\n");
+        printf("*       INSIRA SEUS DADOS DE ACESSO:       *\n");
+        printf("*                                          *\n");
+        printf("********************************************\n\n");
+
+        // Solicita o nome de usuário
+        printf("Nome de usuario: ");
+        fgets(usuario, sizeof(usuario), stdin);
+        usuario[strcspn(usuario, "\n")] = 0;  // Remove o \n da string
+
+        // Solicita a senha
+        printf("Senha: ");
+        esconderSenha(senha);  // Oculta a senha ao digitar
+        printf("\n");
+        limparTela();
+
+        // Verifica se as credenciais estão corretas
+        if (strcmp(usuario, usuarioCorreto) == 0 && strcmp(senha, senhaCorreta) == 0) {
+            printf("\n********************************************\n");
+            printf("*                                            *\n");
+            printf("*       Login realizado com sucesso!         *\n");
+            printf("*                                            *\n");
+            printf("*          Redirecionando...                 *\n");
+            printf("*                                            *\n");
+            printf("********************************************\n");
+            esperarTecla();
+            loginSucesso = 1;  // Define que o login foi bem-sucedido para sair do loop
+        } else {
+            tentativas++;  // Incrementa o número de tentativas
+            if (tentativas < 3) {
+                printf("\nNome de usuario ou senha incorretos, tente novamente! (%d/3 tentativas)\n", tentativas);
+                printf("Pressione ENTER para continuar... \n\n");
+                getchar();
+                limparTela();
+            } else {
+                printf("\n********************************************\n");
+                printf("*                                            *\n");
+                printf("*  Numero maximo de tentativas atingido!     *\n");
+                printf("*  O sistema sera encerrado...               *\n");
+                printf("*                                            *\n");
+                printf("********************************************\n");
+                esperarTecla();  // Exibe a mensagem por alguns segundos antes de encerrar
+            }
+        }
+    }
+
+    if (!loginSucesso) {
+        exit(0);  // Encerra o programa caso o login não tenha sido bem-sucedido
+    }
+}
+
 
 int main() {
-    setlocale(LC_ALL,"");
+
+    setlocale(LC_ALL, "");
+    telaLogin();
     menu();
     return 0;
 }
