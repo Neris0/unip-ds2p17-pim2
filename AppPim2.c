@@ -1,0 +1,687 @@
+//versão 11.10.2024
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+
+#ifdef _WIN32
+#include <windows.h>  // Para Windows
+#else
+#include <termios.h>  // Para Linux/Unix/macOS
+#include <unistd.h>
+#endif
+
+// Definições de limite
+#define MAX_LIVROS 100
+#define MAX_BIBLIOTECARIOS 10
+#define MAX_CLIENTES 100
+#define MAX_EMPRESTIMOS 50
+#define MAX_COLABORADORES 10
+#define DIAS_LIMITE 7 // Limite de dias de empréstimo
+
+// Declaração de funções
+void limparTela();
+void ocultarSenha(char *senha);
+int loginAdmin();
+int loginColaborador();
+void cadastrarColaborador();
+void exibirColaboradores();
+void exibirLivros();
+void exibirClientes();
+void atualizarColaborador();
+void deletarColaborador();
+void menu();
+void menuLogin();
+void menuBibliotecario();
+void menuCliente();
+void menuLivro();
+void emprestarLivro();
+void devolverLivro();
+
+// Função para limpar a tela
+void limparTela() {
+    #ifdef _WIN32
+        system("cls");
+    #else
+        system("clear");
+    #endif
+}
+
+void pausar() {
+    printf("Pressione Enter para continuar...");
+    getchar();  // Espera por um Enter (captura a nova linha)
+}
+
+// Função para ocultar a senha durante a digitação
+void ocultarSenha(char *senha) {
+    int i = 0;
+    char ch;
+
+    #ifdef _WIN32  // Para sistemas Windows
+        while ((ch = _getch()) != '\r') {
+            if (ch == '\b' && i > 0) {
+                printf("\b \b");
+                i--;
+            } else if (ch != '\b') {
+                senha[i] = ch;
+                printf("*");
+                i++;
+            }
+        }
+    #else  // Para sistemas Unix/Linux/macOS
+        struct termios oldt, newt;
+        tcgetattr(STDIN_FILENO, &oldt);            // Obtém os parâmetros atuais do terminal
+        newt = oldt;
+        newt.c_lflag &= ~(ECHO);                   // Desabilita o echo dos caracteres
+        tcsetattr(STDIN_FILENO, TCSANOW, &newt);   // Aplica as novas configurações imediatamente
+
+        while ((ch = getchar()) != '\n') {         // Digita a senha
+            if (ch == '\b' && i > 0) {             // Backspace para apagar
+                printf("\b \b");
+                i--;
+            } else {
+                senha[i] = ch;
+                printf("*");
+                i++;
+            }
+        }
+
+        tcsetattr(STDIN_FILENO, TCSANOW, &oldt);   // Restaura as configurações antigas
+    #endif
+
+    senha[i] = '\0';  // Termina a string da senha
+}
+
+// Estruturas de dados
+typedef struct {
+    int id;
+    char nome[50];
+    char senha[20];
+} Colaborador;
+
+typedef struct {
+    int id;
+    char nome[50];
+} Bibliotecario;
+
+typedef struct {
+    int id;
+    char nome[50];
+} Cliente;
+
+typedef struct {
+    int id;
+    char titulo[100];
+    char autor[50];
+    int disponivel;
+} Livro;
+
+typedef struct {
+    int id;
+    int idCliente;
+    int idLivro;
+    time_t dataEmprestimo;
+    time_t dataDevolucaoPrevista;
+} Emprestimo;
+
+// Variáveis globais
+Bibliotecario bibliotecarios[MAX_BIBLIOTECARIOS];
+Cliente clientes[MAX_CLIENTES];
+Livro livros[MAX_LIVROS];
+Emprestimo emprestimos[MAX_EMPRESTIMOS];
+Colaborador colaboradores[MAX_COLABORADORES];
+
+int numBibliotecarios = 0;
+int numClientes = 0;
+int numLivros = 0;
+int numEmprestimos = 0;
+int numColaboradores = 0;
+
+float valorMultaPorDia = 0.50;
+// Funções de Cadastro de Colaborador (para Admin)
+void cadastrarColaborador() {
+    limparTela();
+    if (numColaboradores < MAX_COLABORADORES) {
+        Colaborador colaborador;
+        colaborador.id = numColaboradores + 1;
+        printf("Nome do Colaborador: ");
+        scanf(" %[^\n]", colaborador.nome);
+        getchar();  // Limpa o caractere '\n' do buffer
+        printf("Senha do Colaborador: ");
+        ocultarSenha(colaborador.senha);  // Oculta a digitação da senha
+
+        if (colaborador.senha[0] == '\0'){
+            printf("\nEsse campo não pode estar vazio \n");
+            aguardar();
+            return;
+        }
+         colaboradores[numColaboradores++] = colaborador;   
+        printf("\nColaborador cadastrado com sucesso!\n");
+        aguardar();
+    } else {
+        printf("Limite de colaboradores atingido!\n");
+    }
+    limparTela();
+}
+
+// Função para exibir os colaboradores cadastrados
+void exibirColaboradores() {
+    //limparTela();
+    printf("Colaboradores cadastrados:\n");
+    for (int i = 0; i < numColaboradores; i++) {
+        printf("ID: %d | Nome: %s\n", colaboradores[i].id, colaboradores[i].nome);
+    }
+    system("pause");
+}
+
+// Função para atualizar colaborador
+void atualizarColaborador() {
+    exibirColaboradores();
+    int id;
+    printf("Digite o ID do colaborador que deseja atualizar (0 para cancelar): ");
+    scanf("%d", &id);
+    
+    if (id > 0 && id <= numColaboradores) {
+        printf("Novo nome do Colaborador: ");
+        scanf(" %[^\n]", colaboradores[id - 1].nome);
+        getchar();  // Limpa o caractere '\n' do buffer
+        printf("Nova senha do Colaborador: ");
+        ocultarSenha(colaboradores[id - 1].senha);
+        printf("\nColaborador atualizado com sucesso!\n");
+    } else {
+        printf("Colaborador não encontrado!\n");
+    }
+    aguardar();
+}
+
+//Função que faz esperar 2 segundos antes de seguir
+void aguardar() {
+    _sleep(2000); 
+    limparTela();
+}
+
+// Função de Login para Usuário
+int loginColaborador() {
+    char nome[50], senha[20];
+    printf("Digite seu nome de usuário: ");
+    scanf(" %[^\n]", nome);
+    getchar();  // Limpa o caractere '\n' do buffer
+    printf("Digite sua senha: ");
+    ocultarSenha(senha);  // Oculta a senha ao digitar
+
+    for (int i = 0; i < numColaboradores; i++) {
+        if (strcmp(colaboradores[i].nome, nome) == 0 && strcmp(colaboradores[i].senha, senha) == 0) {
+            printf("\nLogin realizado com sucesso!\n");
+            aguardar();
+            return 1; // Login válido
+        }
+    }
+    printf("\nNome de usuário ou senha inválidos!\n");
+    aguardar();
+    return 0; // Login inválido
+}
+
+// Função de Login para Administrador
+int loginAdmin() {
+    char nome[20], senha[20];
+    const char adminNome[] = "admin";
+    const char adminSenha[] = "1234";
+
+    printf("Digite o nome de usuário (admin): ");
+    scanf(" %[^\n]", nome);
+    getchar();  // Limpa o caractere '\n' do buffer
+    printf("Digite a senha: ");
+    ocultarSenha(senha);
+
+    if (strcmp(nome, adminNome) == 0 && strcmp(senha, adminSenha) == 0) {
+        esperarTecla();
+        return 1;
+    } else {
+        printf("\nNome de usuário ou senha de administrador inválidos, tente novamente!\n");
+        aguardar();
+        return 0;
+    }
+}
+
+//função pra esperar a tecla.
+void esperarTecla() {
+    printf("\nEntrando...\n");
+    _sleep(2000);  // Espera 2000 milissegundos (2 segundos)
+    limparTela();
+}
+
+void gerarRelatorio() {
+    printf("Relatorio de todos os registros:\n");
+    exibirColaboradores();
+    exibirLivros();
+    exibirClientes();
+    
+}
+
+// Função para escolher entre Admin ou Usuário
+void menuLogin() {
+    int opcao;
+    do {
+        limparTela();
+        printf("********************************************\n");
+        printf("*            Sistema de Biblioteca         *\n");
+        printf("********************************************\n");
+        printf("1. Entrar como Administrador\n");
+        printf("2. Entrar como Usuário\n");
+        printf("0. Sair\n");
+        printf("Escolha uma opção: ");
+        scanf("%d", &opcao);
+
+        switch (opcao) {
+            case 1:
+              limparTela();
+                if (loginAdmin()) {
+                    int escolha;
+                    do {
+                        limparTela();
+                        printf("Menu do Administrador:\n");
+                        printf("1. Cadastrar Colaborador\n");
+                        printf("2. Exibir Colaboradores\n");
+                        printf("3. Atualizar Colaborador\n");
+                        printf("4. Gerar Relatório\n");
+                        printf("0. Sair\n");
+                        printf("Escolha uma opção: ");
+                        scanf("%d", &escolha);
+                        limparTela();
+
+                        if (escolha == 1) {
+                            cadastrarColaborador();
+                        } else if (escolha == 2) {
+                            exibirColaboradores();
+                        } else if (escolha == 3) {
+                            atualizarColaborador();
+                        } else if (escolha == 4){
+                            gerarRelatorio();
+                        } else if (escolha != 1 && escolha != 2 && escolha != 3 && escolha != 4 && escolha != 0) {
+                            printf("\nEscolha incorreta!\n");
+                            aguardar();
+                        }
+                    } while (escolha != 0);
+                }
+                break;
+            case 2:
+                limparTela();
+                if (loginColaborador()) {
+                    // Acessa o menu de usuário
+                    menu(); 
+                }
+                break;
+            case 0:
+                printf("Saindo...\n");
+                break;
+            default:
+                printf("\nOpção inválida!\n");
+                aguardar();
+        }
+    } while (opcao != 0);
+}
+
+// Funções de CRUD para Bibliotecário
+void cadastrarBibliotecario() {
+    if (numBibliotecarios < MAX_BIBLIOTECARIOS) {
+        Bibliotecario biblio;
+        biblio.id = numBibliotecarios + 1;
+        printf("Nome do Bibliotecário: ");
+        scanf(" %[^\n]", biblio.nome);
+        bibliotecarios[numBibliotecarios++] = biblio;
+        printf("Bibliotecário cadastrado com sucesso!\n");
+    } else {
+        printf("Limite de bibliotecários atingido!\n");
+    }
+    aguardar();
+}
+
+void exibirBibliotecarios() {
+    limparTela();
+    printf("Bibliotecários cadastrados:\n");
+    for (int i = 0; i < numBibliotecarios; i++) {
+        printf("ID: %d | Nome: %s\n", bibliotecarios[i].id, bibliotecarios[i].nome);
+    }
+    aguardar();
+}
+
+void atualizarBibliotecario() {
+    exibirBibliotecarios();
+    int id;
+    printf("Digite o ID do bibliotecário que deseja atualizar (0 para cancelar): ");
+    scanf("%d", &id);
+    
+    if (id > 0 && id <= numBibliotecarios) {
+        printf("Novo nome do Bibliotecário: ");
+        scanf(" %[^\n]", bibliotecarios[id - 1].nome);
+        printf("Bibliotecário atualizado com sucesso!\n");
+    } else {
+        printf("Bibliotecário não encontrado!\n");
+    }
+    aguardar();
+}
+
+void deletarBibliotecario() {
+    exibirBibliotecarios();
+    int id;
+    printf("Digite o ID do bibliotecário que deseja deletar (0 para cancelar): ");
+    scanf("%d", &id);
+    
+    if (id > 0 && id <= numBibliotecarios) {
+        for (int i = id - 1; i < numBibliotecarios - 1; i++) {
+            bibliotecarios[i] = bibliotecarios[i + 1];
+        }
+        numBibliotecarios--;
+        printf("Bibliotecário deletado com sucesso!\n");
+    } else {
+        printf("Bibliotecário não encontrado!\n");
+    }
+    aguardar();
+}
+
+// Funções de CRUD para Clientes
+void cadastrarCliente() {
+    if (numClientes < MAX_CLIENTES) {
+        Cliente cli;
+        cli.id = numClientes + 1;
+        printf("Nome do Cliente: ");
+        scanf(" %[^\n]", cli.nome);
+        clientes[numClientes++] = cli;
+        printf("Cliente cadastrado com sucesso!\n");
+    } else {
+        printf("Limite de clientes atingido!\n");
+    }
+    aguardar();
+}
+
+void exibirClientes() {
+    limparTela();
+    printf("Clientes cadastrados:\n");
+    for (int i = 0; i < numClientes; i++) {
+        printf("ID: %d | Nome: %s\n", clientes[i].id, clientes[i].nome);
+    }
+    system("pause");
+}
+
+void atualizarCliente() {
+    exibirClientes();
+    int id;
+    printf("Digite o ID do cliente que deseja atualizar (0 para cancelar): ");
+    scanf("%d", &id);
+    
+    if (id > 0 && id <= numClientes) {
+        printf("Novo nome do Cliente: ");
+        scanf(" %[^\n]", clientes[id - 1].nome);
+        printf("Cliente atualizado com sucesso!\n");
+    } else {
+        printf("Cliente não encontrado!\n");
+    }
+    pausar();
+}
+
+void deletarCliente() {
+    exibirClientes();
+    int id;
+    printf("Digite o ID do cliente que deseja deletar (0 para cancelar): ");
+    scanf("%d", &id);
+    
+    if (id > 0 && id <= numClientes) {
+        for (int i = id - 1; i < numClientes - 1; i++) {
+            clientes[i] = clientes[i + 1];
+        }
+        numClientes--;
+        printf("Cliente deletado com sucesso!\n");
+    } else {
+        printf("Cliente não encontrado!\n");
+    }
+    aguardar();
+}
+
+// Funções de CRUD para Livros
+void cadastrarLivro() {
+    limparTela();
+    if (numLivros < MAX_LIVROS) {
+        Livro livro;
+        livro.id = numLivros + 1;
+        printf("Título do Livro: ");
+        scanf(" %[^\n]", livro.titulo);
+        printf("Autor do Livro: ");
+        scanf(" %[^\n]", livro.autor);
+        livro.disponivel = 1;
+        livros[numLivros++] = livro;
+        printf("Livro cadastrado com sucesso!\n");
+    } else {
+        printf("Limite de livros atingido!\n");
+    }
+    aguardar();
+}
+   
+void exibirLivros() {
+    limparTela();
+    printf("Livros cadastrados:\n");
+    for (int i = 0; i < numLivros; i++) {
+        printf("ID: %d | Título: %s | Autor: %s | Disponível: %s\n", 
+            livros[i].id, livros[i].titulo, livros[i].autor, livros[i].disponivel ? "Sim" : "Não");
+    }
+    system("pause");
+}
+
+void atualizarLivro() {
+    exibirLivros();
+    int id;
+    printf("Digite o ID do livro que deseja atualizar (0 para cancelar): ");
+    scanf("%d", &id);
+    
+    if (id > 0 && id <= numLivros) {
+        printf("Novo título do Livro: ");
+        scanf(" %[^\n]", livros[id - 1].titulo);
+        printf("Novo autor do Livro: ");
+        scanf(" %[^\n]", livros[id - 1].autor);
+        printf("Livro atualizado com sucesso!\n");
+    } else {
+        printf("Livro não encontrado!\n");
+    }
+    aguardar();
+}
+
+void deletarLivro() {
+    exibirLivros();
+    int id;
+    printf("Digite o ID do livro que deseja deletar (0 para cancelar): ");
+    scanf("%d", &id);
+    
+    if (id > 0 && id <= numLivros) {
+        for (int i = id - 1; i < numLivros - 1; i++) {
+            livros[i] = livros[i + 1];
+        }
+        numLivros--;
+        printf("Livro deletado com sucesso!\n");
+    } else {
+        printf("Livro não encontrado!\n");
+    }
+    aguardar();
+}
+
+// Funções para empréstimos e devoluções
+void emprestarLivro() {
+    if (numEmprestimos < MAX_EMPRESTIMOS) {
+        int idCliente, idLivro;
+        
+        // Exibe clientes e livros disponíveis
+        exibirClientes();
+        printf("Digite o ID do Cliente: ");
+        scanf("%d", &idCliente);
+        
+        exibirLivros();
+        printf("Digite o ID do Livro: ");
+        scanf("%d", &idLivro);
+
+        // Verifica se o livro está disponível
+        if (livros[idLivro - 1].disponivel) {
+            // Registra o empréstimo
+            Emprestimo emp;
+            emp.id = numEmprestimos + 1;
+            emp.idCliente = idCliente;
+            emp.idLivro = idLivro;
+            emp.dataEmprestimo = time(NULL);  // Data atual
+            emp.dataDevolucaoPrevista = emp.dataEmprestimo + (DIAS_LIMITE * 24 * 60 * 60);
+            
+            // Marca o livro como indisponível
+            livros[idLivro - 1].disponivel = 0;
+            emprestimos[numEmprestimos++] = emp;
+            printf("Empréstimo registrado com sucesso!\n");
+        } else {
+            printf("Livro não está disponível para empréstimo.\n");
+        }
+    } else {
+        printf("Limite de empréstimos atingido!\n");
+    }
+    aguardar();
+}
+
+void devolverLivro() {
+    limparTela();
+    int idEmprestimo;
+    printf("Digite o ID do Empréstimo para devolução: ");
+    scanf("%d", &idEmprestimo);
+
+    if (idEmprestimo > 0 && idEmprestimo <= numEmprestimos) {
+        Emprestimo emp = emprestimos[idEmprestimo - 1];
+        time_t agora = time(NULL);
+        double diasPassados = difftime(agora, emp.dataEmprestimo) / (60 * 60 * 24);
+        
+        // Calcular multa por atraso
+        if (diasPassados > DIAS_LIMITE) {
+            double multa = (diasPassados - DIAS_LIMITE) * valorMultaPorDia;
+            printf("Livro devolvido com atraso. Multa de R$ %.2f\n", multa);
+        } else {
+            printf("Livro devolvido no prazo.\n");
+        }
+        
+        // Marca o livro como disponível novamente
+        livros[emp.idLivro - 1].disponivel = 1;
+        printf("Devolução registrada com sucesso!\n");
+    } else {
+        printf("Empréstimo não encontrado.\n");
+    }
+    aguardar();
+}
+
+// Menu principal do usuário
+void menu() {
+    int opcao;
+    do {
+        limparTela();
+        printf("********************************************\n");
+        printf("*            Sistema de Biblioteca         *\n");
+        printf("********************************************\n");
+        printf("1. Menu Bibliotecário\n");
+        printf("2. Menu Cliente\n");
+        printf("3. Menu Livro\n");
+        printf("4. Emprestar Livro\n");
+        printf("5. Devolver Livro\n");
+        printf("0. Sair\n");
+        printf("Escolha uma opção: ");
+        scanf("%d", &opcao);
+
+        switch (opcao) {
+            case 1: menuBibliotecario(); break;
+            case 2: menuCliente(); break;
+            case 3: menuLivro(); break;
+            case 4: emprestarLivro(); break;
+            case 5: devolverLivro(); break;
+            case 0: printf("Saindo...\n"); break;
+            default: printf("Opção inválida!\n");
+        }
+    } while (opcao != 0);
+}
+
+// Submenus de cada entidade
+void menuBibliotecario() {
+    int opcao;
+    do {
+        limparTela();
+        printf("--- Menu Bibliotecário ---\n");
+        printf("1. Cadastrar Bibliotecário\n");
+        printf("2. Exibir Bibliotecários\n");
+        printf("3. Atualizar Bibliotecário\n");
+        printf("4. Deletar Bibliotecário\n");
+        printf("0. Voltar\n");
+        printf("Escolha uma opção: ");
+        scanf("%d", &opcao);
+        
+        switch (opcao) {
+            case 1: 
+            limparTela();
+            cadastrarBibliotecario(); break;
+            case 2: exibirBibliotecarios(); break;
+            case 3: atualizarBibliotecario(); break;
+            case 4: deletarBibliotecario(); break;
+            case 0: break;
+            default: printf("Opção inválida!\n");
+        }
+    } while (opcao != 0);
+}
+
+void menuCliente() {
+    int opcao;
+    do {
+        limparTela();
+        printf("--- Menu Cliente ---\n");
+        printf("1. Cadastrar Cliente\n");
+        printf("2. Exibir Clientes\n");
+        printf("3. Atualizar Cliente\n");
+        printf("4. Deletar Cliente\n");
+        printf("0. Voltar\n");
+        printf("Escolha uma opção: ");
+        scanf("%d", &opcao);
+        
+        switch (opcao) {
+            case 1: 
+            limparTela();
+            cadastrarCliente(); break;
+            case 2: exibirClientes(); break;
+            case 3: atualizarCliente(); break;
+            case 4: deletarCliente(); break;
+            case 0: break;
+            default: printf("Opção inválida!\n");
+        }
+    } while (opcao != 0);
+}
+
+void menuLivro() {
+    int opcao;
+    do {
+        limparTela();
+        printf("--- Menu Livro ---\n");
+        printf("1. Cadastrar Livro\n");
+        printf("2. Exibir Livros\n");
+        printf("3. Atualizar Livro\n");
+        printf("4. Deletar Livro\n");
+        printf("0. Voltar\n");
+        printf("Escolha uma opção: ");
+        scanf("%d", &opcao);
+        
+        switch (opcao) {
+            case 1: 
+            limparTela();
+            cadastrarLivro(); break;
+            case 2: exibirLivros(); break;
+            case 3: atualizarLivro(); break;
+            case 4: deletarLivro(); break;
+            case 0: break;
+            default: printf("Opção inválida!\n");
+        }
+    } while (opcao != 0);
+}
+
+// Função principal
+int main() {
+     
+    // Altera a codificação do console para UTF-8 
+    SetConsoleOutputCP(CP_UTF8);
+    menuLogin();  // Agora inicia pelo menu de login (Admin ou Usuário)
+    return 0;
+}
